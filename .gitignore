@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploaded media (video / audio files)
+uploads/
+media/
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wav
+*.mp3
+*.flac
+
+# Model files (too large for repo)
+models/
+*.bin
+*.pt
+*.safetensors
+
+# Database
+*.db
+*.sqlite3
+
+# Docker
+docker-data/
+
+# Logs
+*.log
+logs/
+
+# Reference docs
+课记语音转文本需求.html
+课记语音转文本需求_files/
+课记应用开发文档.md
+
+# Agent memory
+.mimocode/
