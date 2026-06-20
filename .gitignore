@@ -45,6 +45,8 @@ Thumbs.db
 # Uploaded media (video / audio files)
 uploads/
 media/
+backend/uploads/
+backend/media/
 *.mp4
 *.avi
 *.mkv
@@ -52,6 +54,7 @@ media/
 *.wav
 *.mp3
 *.flac
+*.webm
 
 # Model files (too large for repo)
 models/
@@ -62,6 +65,7 @@ models/
 # Database
 *.db
 *.sqlite3
+backend/*.db
 
 # Docker
 docker-data/
