@@ -12,7 +12,20 @@ env/
 
 # Environment
 .env
-.env.local
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Credentials / secrets
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Node / Frontend
 node_modules/
