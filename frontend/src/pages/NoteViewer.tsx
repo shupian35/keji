@@ -17,6 +17,33 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+/** 下载文件 */
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** 导出 AI 笔记为 Markdown */
+function exportNotes(contentMd: string, filename: string) {
+  downloadFile(contentMd, `${filename}.md`, "text/markdown;charset=utf-8");
+}
+
+/** 导出语音转写原文为文本 */
+function exportTranscript(transcript: { start: number; end: number; text: string }[], filename: string) {
+  const lines = transcript.map(
+    (seg) => `[${formatTime(seg.start)} - ${formatTime(seg.end)}] ${seg.text}`
+  );
+  const content = lines.join("\n\n");
+  downloadFile(content, `${filename}_转写原文.txt`, "text/plain;charset=utf-8");
+}
+
 /** 节流：在 delay 毫秒内最多执行一次 */
 function useThrottledCallback<T extends (...args: any[]) => void>(
   fn: T,
@@ -204,6 +231,22 @@ export default function NoteViewer() {
             </span>
           )}
           <button
+            onClick={() => exportNotes(notes.content_md, notes.filename.replace(/\.[^.]+$/, ""))}
+            className="px-2 py-1 rounded bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+            title="导出 AI 课程笔记"
+          >
+            📥 导出笔记
+          </button>
+          {hasTranscript && (
+            <button
+              onClick={() => exportTranscript(notes.transcript, notes.filename.replace(/\.[^.]+$/, ""))}
+              className="px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+              title="导出语音转写原文"
+            >
+              📥 导出转写
+            </button>
+          )}
+          <button
             onClick={() => navigate("/")}
             className="text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
           >
@@ -342,6 +385,14 @@ export default function NoteViewer() {
 
               {showTranscript && (
                 <div className="mt-3 space-y-1 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+                  <div className="flex justify-end mb-2">
+                    <button
+                      onClick={() => exportTranscript(notes.transcript, notes.filename.replace(/\.[^.]+$/, ""))}
+                      className="text-xs px-2 py-1 rounded bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/70 transition-colors"
+                    >
+                      📥 导出转写原文
+                    </button>
+                  </div>
                   {notes.transcript.map((seg, idx) => (
                     <div
                       key={idx}

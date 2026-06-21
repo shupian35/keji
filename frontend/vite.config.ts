@@ -10,6 +10,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
+    allowedHosts: ["shu"],
     port: 5173,
     proxy: {
       "/api": {

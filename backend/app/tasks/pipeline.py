@@ -140,17 +140,20 @@ def process_video(self, video_id: str):
         _progress(0.85, "保存笔记...")
 
         # ── 步骤 7: 存储笔记到数据库 ────────────────
+        import uuid as uuid_mod
+
         db = SyncSessionLocal()
         try:
             # 删除旧笔记（重试场景）
             db.query(Note).filter(Note.video_id == video_id_str).delete()
 
             note = Note(
+                id=str(uuid_mod.uuid4()),
                 video_id=video_id_str,
                 content_md=note_data.get("markdown_content", ""),
-                segments_json={"segments": note_data.get("segments", [])},
-                transcript_json={"segments": transcript_segments},
             )
+            note.set_segments(note_data.get("segments", []))
+            note.set_transcript(transcript_segments)
             db.add(note)
 
             # 更新视频状态

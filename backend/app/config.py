@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     media_dir: str = "./media"
 
     # --- CORS ---
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://192.168.31.58:5173"]
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
