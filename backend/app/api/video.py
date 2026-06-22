@@ -23,13 +23,19 @@ from app.schemas import (
 
 router = APIRouter(tags=["videos"])
 
-# 允许的视频 MIME 类型
-ALLOWED_VIDEO_TYPES = {
+# 允许的媒体 MIME 类型（视频 + 音频）
+ALLOWED_MEDIA_TYPES = {
     "video/mp4",
     "video/x-msvideo",   # AVI
     "video/x-matroska",  # MKV
     "video/quicktime",   # MOV
     "video/webm",
+    "audio/mpeg",        # MP3
+    "audio/wav",
+    "audio/x-m4a",       # M4A
+    "audio/aac",
+    "audio/ogg",
+    "audio/flac",
 }
 MAX_UPLOAD_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
 
@@ -57,11 +63,11 @@ async def upload_video(
     5. 返回 task_id（即 video_id）
     """
     # ── 验证 ────────────────────────────────────────
-    if file.content_type and file.content_type not in ALLOWED_VIDEO_TYPES:
+    if file.content_type and file.content_type not in ALLOWED_MEDIA_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的文件类型: {file.content_type}。"
-                   f"支持: {', '.join(ALLOWED_VIDEO_TYPES)}",
+                   f"支持: {', '.join(ALLOWED_MEDIA_TYPES)}",
         )
 
     # ── 保存文件 ────────────────────────────────────
