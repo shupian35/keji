@@ -123,6 +123,7 @@ async def upload_video(
         status=VideoStatus.pending,
         progress=0.0,
         video_id=video.id,
+        filename=video.filename,
         step="已加入处理队列" if task_submitted else "已保存，等待 Worker 处理",
     )
 
@@ -139,6 +140,16 @@ async def get_task_status(
     """
     task_id = _validate_uuid(task_id)
 
+    # 先查数据库获取 filename
+    db_result = await db.execute(
+        select(Video).where(Video.id == task_id)
+    )
+    video = db_result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    filename = video.filename
+
     # ── 尝试从 Celery 获取实时进度 ──────────────────
     try:
         from celery.result import AsyncResult
@@ -154,6 +165,7 @@ async def get_task_status(
                 status=VideoStatus.processing,
                 progress=float(meta.get("progress", 0.0)),
                 video_id=str(vid) if vid else None,
+                filename=filename,
                 step=str(meta.get("step", "")),
             )
         elif result.state == "SUCCESS":
@@ -164,6 +176,7 @@ async def get_task_status(
                 status=VideoStatus.done,
                 progress=1.0,
                 video_id=str(vid) if vid else None,
+                filename=filename,
                 step="处理完成",
             )
         elif result.state == "FAILURE":
@@ -171,24 +184,19 @@ async def get_task_status(
                 task_id=task_id,
                 status=VideoStatus.failed,
                 progress=0.0,
+                filename=filename,
                 error=str(result.info) if result.info else "未知错误",
             )
     except Exception:
         pass  # Celery 不可用，回退到数据库
 
     # ── 回退：从数据库读取 ──────────────────────────
-    result = await db.execute(
-        select(Video).where(Video.id == task_id)
-    )
-    video = result.scalar_one_or_none()
-    if not video:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
     return TaskResponse(
         task_id=video.id,
         status=VideoStatus(video.status),
         progress=video.progress,
         video_id=video.id,
+        filename=filename,
         error=video.error_message,
     )
 

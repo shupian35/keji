@@ -38,6 +38,7 @@ class TaskResponse(BaseModel):
     status: VideoStatus
     progress: float = Field(0.0, ge=0.0, le=1.0)
     video_id: str | None = None
+    filename: str | None = None
     step: str | None = None
     error: str | None = None
 

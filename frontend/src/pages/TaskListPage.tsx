@@ -48,7 +48,7 @@ export default function TaskListPage() {
           const d = res.data;
           return {
             taskId: d.task_id,
-            filename: d.step || "处理中",
+            filename: d.filename || "处理中",
             status: d.status,
             progress: d.progress,
             videoId: d.video_id,
@@ -70,11 +70,19 @@ export default function TaskListPage() {
     );
     setTasks(results);
     setLoading(false);
+    return results;
   }, [ids.join(",")]);
 
   useEffect(() => {
-    fetchTasks();
-    const timer = setInterval(fetchTasks, 2000);
+    let timer: ReturnType<typeof setInterval>;
+    const poll = async () => {
+      const results = await fetchTasks();
+      if (results && results.every((t) => t.status === "done" || t.status === "failed")) {
+        clearInterval(timer);
+      }
+    };
+    poll();
+    timer = setInterval(poll, 2000);
     return () => clearInterval(timer);
   }, [fetchTasks]);
 
