@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage";
 import TaskStatus from "./pages/TaskStatus";
 import NoteViewer from "./pages/NoteViewer";
 import VideoListPage from "./pages/VideoListPage";
+import TaskListPage from "./pages/TaskListPage";
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -67,6 +68,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/videos" element={<VideoListPage />} />
+          <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/task/:taskId" element={<TaskStatus />} />
           <Route path="/video/:videoId" element={<NoteViewer />} />
         </Routes>
