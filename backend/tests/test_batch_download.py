@@ -23,13 +23,13 @@ async def test_batch_download_success(client: AsyncClient, db):
     zip_buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(zip_buffer) as zf:
         names = zf.namelist()
-        assert "001_lecture1.mp4.md" in names
-        assert "001_lecture1.mp4.txt" in names
-        assert "002_lecture2.mp4.md" in names
-        assert "002_lecture2.mp4.txt" in names
-        assert zf.read("001_lecture1.mp4.md") == b"# Lecture 1 Notes"
-        assert zf.read("002_lecture2.mp4.md") == b"# Lecture 2 Notes"
-        transcript1 = zf.read("001_lecture1.mp4.txt").decode()
+        assert "lecture1.md" in names
+        assert "lecture1.txt" in names
+        assert "lecture2.md" in names
+        assert "lecture2.txt" in names
+        assert zf.read("lecture1.md") == b"# Lecture 1 Notes"
+        assert zf.read("lecture2.md") == b"# Lecture 2 Notes"
+        transcript1 = zf.read("lecture1.txt").decode()
         assert "Hello" in transcript1
         assert "[0.00s - 3.00s]" in transcript1
 
@@ -45,7 +45,7 @@ async def test_batch_download_single_video(client: AsyncClient, db):
     zip_buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(zip_buffer) as zf:
         assert len(zf.namelist()) == 2
-        assert "001_single.mp4.md" in zf.namelist()
+        assert "single.md" in zf.namelist()
 
 
 @pytest.mark.asyncio
@@ -144,6 +144,6 @@ async def test_batch_download_transcript_format(client: AsyncClient, db):
 
     zip_buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(zip_buffer) as zf:
-        txt = zf.read("001_format.mp4.txt").decode()
+        txt = zf.read("format.txt").decode()
         assert "[1.23s - 5.67s] First segment" in txt
         assert "[6.00s - 10.50s] Second segment" in txt

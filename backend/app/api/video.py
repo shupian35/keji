@@ -386,10 +386,12 @@ async def batch_download_videos(
     try:
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for idx, video in enumerate(videos, 1):
+            for video in videos:
                 note = notes_by_video.get(video.id)
                 if note:
-                    note_filename = f"{idx:03d}_{video.filename}.md"
+                    # 去掉源文件扩展名，只保留基本名称
+                    stem = Path(video.filename).stem
+                    note_filename = f"{stem}.md"
                     zip_file.writestr(note_filename, note.content_md)
 
                     transcript_segments = note.get_transcript()
@@ -397,7 +399,7 @@ async def batch_download_videos(
                         f"[{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}"
                         for seg in transcript_segments
                     )
-                    transcript_filename = f"{idx:03d}_{video.filename}.txt"
+                    transcript_filename = f"{stem}.txt"
                     zip_file.writestr(transcript_filename, transcript_content)
 
         zip_buffer.seek(0)
