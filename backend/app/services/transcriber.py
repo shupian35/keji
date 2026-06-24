@@ -1,6 +1,8 @@
 """SiliconFlow 语音转写服务封装"""
 
+import json
 import logging
+import subprocess
 from pathlib import Path
 
 from app.config import settings
@@ -14,6 +16,7 @@ class Transcriber:
     云端语音识别服务（SiliconFlow SenseVoice）。
 
     使用 SiliconFlow API 进行语音转写，返回完整文本。
+    优先使用 curl 调用（兼容性更好），回退到 OpenAI 客户端。
 
     用法:
         transcriber = Transcriber()
@@ -31,6 +34,46 @@ class Transcriber:
     @property
     def base_url(self) -> str:
         return get_setting_value_sync("STT_API_URL", settings.siliconflow_base_url)
+
+    def _transcribe_with_curl(self, audio_path: Path) -> str:
+        """使用 curl 调用语音转写 API（兼容性更好）"""
+        url = f"{self.base_url}/audio/transcriptions"
+        result = subprocess.run(
+            [
+                "curl", "-s", "-X", "POST", url,
+                "-H", f"Authorization: Bearer {self.api_key}",
+                "-F", f"model={self.model}",
+                "-F", f"file=@{audio_path}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"curl 调用失败: {result.stderr}")
+
+        data = json.loads(result.stdout)
+        if "error" in data:
+            raise RuntimeError(f"API 错误: {data['error']}")
+
+        return data.get("text", "")
+
+    def _transcribe_with_openai(self, audio_path: Path) -> str:
+        """使用 OpenAI 客户端调用语音转写 API"""
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+        )
+
+        with open(audio_path, "rb") as f:
+            response = client.audio.transcriptions.create(
+                model=self.model,
+                file=(audio_path.name, f),
+            )
+
+        return getattr(response, "text", None) or ""
 
     def transcribe(
         self, audio_path: str, language: str | None = "zh", duration: float | None = None
@@ -53,29 +96,26 @@ class Transcriber:
             raise FileNotFoundError(f"音频文件不存在: {audio_path}")
 
         if not self.api_key:
-            raise ValueError("SILICONFLOW_API_KEY 未配置，无法进行语音转写")
+            raise ValueError("STT_API_KEY 未配置，无法进行语音转写")
 
         logger.info("开始转写: %s (model=%s)", audio_path, self.model)
 
-        from openai import OpenAI
+        # 优先使用 curl（SiliconFlow API 对 Python HTTP 客户端有兼容性问题）
+        try:
+            text = self._transcribe_with_curl(audio_path)
+            logger.info("curl 转写成功: %d 字符", len(text))
+        except Exception as e:
+            logger.warning("curl 转写失败 (%s)，尝试 OpenAI 客户端", e)
+            try:
+                text = self._transcribe_with_openai(audio_path)
+                logger.info("OpenAI 客户端转写成功: %d 字符", len(text))
+            except Exception as e2:
+                logger.error("OpenAI 客户端也失败: %s", e2)
+                raise
 
-        client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-        )
-
-        with open(audio_path, "rb") as f:
-            logger.info("上传文件: %s (size=%d bytes)", audio_path.name, audio_path.stat().st_size)
-            response = client.audio.transcriptions.create(
-                model=self.model,
-                file=(audio_path.name, f),
-            )
-            logger.info("API 响应: %s", response)
-
-        text = getattr(response, "text", None) or ""
         text = text.strip()
         if not text:
-            logger.warning("转写结果为空: response=%s", response)
+            logger.warning("转写结果为空")
             return []
 
         logger.info("转写完成: %d 字符", len(text))
