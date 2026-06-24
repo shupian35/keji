@@ -50,9 +50,9 @@ def get_ai_config() -> dict:
     llm_base_url = get_setting_value_sync("LLM_BASE_URL", settings.llm_base_url)
     llm_model = get_setting_value_sync("LLM_MODEL", settings.llm_model)
 
-    siliconflow_api_key = get_setting_value_sync("SILICONFLOW_API_KEY", settings.siliconflow_api_key)
-    siliconflow_model = get_setting_value_sync("SILICONFLOW_MODEL", settings.siliconflow_model)
-    siliconflow_base_url = get_setting_value_sync("SILICONFLOW_BASE_URL", settings.siliconflow_base_url)
+    siliconflow_api_key = get_setting_value_sync("STT_API_KEY", settings.siliconflow_api_key)
+    siliconflow_model = get_setting_value_sync("STT_MODEL", settings.siliconflow_model)
+    siliconflow_base_url = get_setting_value_sync("STT_API_URL", settings.siliconflow_base_url)
 
     return {
         "llm_api_key": llm_api_key,

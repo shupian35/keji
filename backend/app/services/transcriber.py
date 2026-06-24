@@ -22,15 +22,15 @@ class Transcriber:
     """
 
     def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or get_setting_value_sync("SILICONFLOW_API_KEY", settings.siliconflow_api_key)
+        self.api_key = api_key or get_setting_value_sync("STT_API_KEY", settings.siliconflow_api_key)
 
     @property
     def model(self) -> str:
-        return get_setting_value_sync("SILICONFLOW_MODEL", settings.siliconflow_model)
+        return get_setting_value_sync("STT_MODEL", settings.siliconflow_model)
 
     @property
     def base_url(self) -> str:
-        return get_setting_value_sync("SILICONFLOW_BASE_URL", settings.siliconflow_base_url)
+        return get_setting_value_sync("STT_API_URL", settings.siliconflow_base_url)
 
     def transcribe(
         self, audio_path: str, language: str | None = "zh", duration: float | None = None
