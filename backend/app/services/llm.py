@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 from openai import BadRequestError, OpenAI
 
 from app.config import settings
+from app.settings_utils import get_setting_value_sync
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +248,12 @@ def generate_notes_sync(
     Returns:
         dict: {title, markdown_content, segments: [{start, end, text}]}
     """
-    if not settings.llm_api_key:
+    # 优先从数据库读取配置，回退到环境变量
+    llm_api_key = get_setting_value_sync("LLM_API_KEY", settings.llm_api_key)
+    llm_base_url = get_setting_value_sync("LLM_BASE_URL", settings.llm_base_url)
+    llm_model = get_setting_value_sync("LLM_MODEL", settings.llm_model)
+
+    if not llm_api_key:
         raise ValueError("LLM_API_KEY 未配置，无法生成笔记")
     if not transcript_segments:
         raise ValueError("转写片段为空，无法生成笔记")
@@ -255,19 +261,19 @@ def generate_notes_sync(
     prompt = _build_prompt(transcript_segments, screenshot_descriptions)
 
     client = OpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
+        api_key=llm_api_key,
+        base_url=llm_base_url,
     )
 
     logger.info(
         "调用 LLM: model=%s, prompt=%d 字符, segments=%d 个",
-        settings.llm_model, len(prompt), len(transcript_segments),
+        llm_model, len(prompt), len(transcript_segments),
     )
 
     # 尝试使用 json_object 模式（兼容 OpenAI / DeepSeek 等）
     try:
         response = client.chat.completions.create(
-            model=settings.llm_model,
+            model=llm_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
@@ -280,7 +286,7 @@ def generate_notes_sync(
         # 仅当 API 明确拒绝 response_format 时回退（HTTP 400）
         logger.warning("response_format=json_object 不支持，回退到标准模式")
         response = client.chat.completions.create(
-            model=settings.llm_model,
+            model=llm_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
