@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { TaskResponse, NoteResponse, VideoInfo } from "../types";
+import type { TaskResponse, NoteResponse, VideoInfo, SettingItem } from "../types";
 
 const http = axios.create({
   baseURL: "/api",
@@ -34,6 +34,18 @@ export function getMediaUrl(videoId: string): string {
 /** 获取视频列表 */
 export async function listVideos(): Promise<VideoInfo[]> {
   const res = await http.get<VideoInfo[]>("/videos");
+  return res.data;
+}
+
+/** 获取所有设置 */
+export async function getSettings(): Promise<SettingItem[]> {
+  const res = await http.get<SettingItem[]>("/settings");
+  return res.data;
+}
+
+/** 批量更新设置 */
+export async function updateSettings(settings: SettingItem[]): Promise<SettingItem[]> {
+  const res = await http.put<SettingItem[]>("/settings", { settings });
   return res.data;
 }
 

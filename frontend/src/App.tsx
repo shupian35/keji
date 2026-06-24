@@ -5,6 +5,7 @@ import TaskStatus from "./pages/TaskStatus";
 import NoteViewer from "./pages/NoteViewer";
 import VideoListPage from "./pages/VideoListPage";
 import TaskListPage from "./pages/TaskListPage";
+import SettingsPage from "./pages/SettingsPage";
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -53,6 +54,13 @@ function Header() {
               上传新视频
             </Link>
           )}
+          <Link
+            to="/settings"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            title="设置"
+          >
+            ⚙️
+          </Link>
           <ThemeToggle />
         </div>
       </div>
@@ -71,6 +79,7 @@ export default function App() {
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/task/:taskId" element={<TaskStatus />} />
           <Route path="/video/:videoId" element={<NoteViewer />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>
