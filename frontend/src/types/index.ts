@@ -37,6 +37,11 @@ export interface NoteResponse {
   transcript: Segment[];
 }
 
+/** 批量下载请求 */
+export interface BatchDownloadRequest {
+  video_ids: string[];
+}
+
 /** 通用 API 包装 */
 export interface ApiResponse<T> {
   data: T;

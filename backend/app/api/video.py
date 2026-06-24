@@ -1,10 +1,14 @@
 """视频相关 API 路由"""
 
+import io
 import uuid
+import zipfile
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +17,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.task import Video, Note
 from app.schemas import (
+    BatchDownloadRequest,
     MessageResponse,
     NoteResponse,
     SegmentOut,
@@ -308,6 +313,106 @@ async def retry_video_processing(
     return MessageResponse(message="已重新加入处理队列")
 
 
+@router.post("/videos/{video_id}/regenerate-notes", response_model=MessageResponse)
+async def regenerate_video_notes(
+    video_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    重新生成 AI 课程笔记。
+
+    如果已有转写原文，直接用 AI 重新生成笔记（跳过音频转写）。
+    如果没有转写原文，走完整处理流水线。
+    """
+    video_id = _validate_uuid(video_id)
+
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+
+    # 重置状态
+    video.status = VideoStatus.pending.value
+    video.progress = 0.0
+    video.error_message = None
+    await db.commit()
+
+    # 派发重新生成笔记任务
+    try:
+        from app.tasks.pipeline import regenerate_notes
+
+        regenerate_notes.delay(video.id)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"任务队列不可用: {e}")
+
+    return MessageResponse(message="已重新生成笔记")
+
+
+@router.post("/videos/batch-download")
+async def batch_download_videos(
+    request: BatchDownloadRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    if len(request.video_ids) > 50:
+        raise HTTPException(status_code=400, detail="Too many videos requested (max 50)")
+
+    # 去重并验证UUID格式
+    unique_ids = list(dict.fromkeys(request.video_ids))
+    validated_ids = [_validate_uuid(vid) for vid in unique_ids]
+
+    result = await db.execute(
+        select(Video).where(Video.id.in_(validated_ids))
+    )
+    videos = result.scalars().all()
+
+    if len(videos) != len(validated_ids):
+        found_ids = {v.id for v in videos}
+        missing_ids = set(validated_ids) - found_ids
+        raise HTTPException(status_code=404, detail=f"Videos not found: {missing_ids}")
+
+    non_completed = [v for v in videos if v.status != "done"]
+    if non_completed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Videos not completed: {[v.id for v in non_completed]}",
+        )
+
+    notes_result = await db.execute(
+        select(Note).where(Note.video_id.in_(validated_ids))
+    )
+    notes = notes_result.scalars().all()
+    notes_by_video = {n.video_id: n for n in notes}
+
+    try:
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for idx, video in enumerate(videos, 1):
+                note = notes_by_video.get(video.id)
+                if note:
+                    note_filename = f"{idx:03d}_{video.filename}.md"
+                    zip_file.writestr(note_filename, note.content_md)
+
+                    transcript_segments = note.get_transcript()
+                    transcript_content = "\n".join(
+                        f"[{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}"
+                        for seg in transcript_segments
+                    )
+                    transcript_filename = f"{idx:03d}_{video.filename}.txt"
+                    zip_file.writestr(transcript_filename, transcript_content)
+
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"batch_download_{timestamp}.zip"
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成ZIP文件失败: {str(e)}")
+
+
 @router.get("/videos", response_model=list[VideoResponse])
 async def list_videos(
     db: AsyncSession = Depends(get_db),
@@ -327,3 +432,71 @@ async def list_videos(
         )
         for v in videos
     ]
+
+
+class VideoUpdate(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=512)
+
+
+@router.patch("/videos/{video_id}", response_model=VideoResponse)
+async def update_video(
+    video_id: str,
+    body: VideoUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """更新视频文件名。"""
+    video_id = _validate_uuid(video_id)
+
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+
+    video.filename = body.filename
+    await db.commit()
+    await db.refresh(video)
+
+    return VideoResponse(
+        id=str(uuid.UUID(video.id)),
+        filename=video.filename,
+        status=VideoStatus(video.status),
+        progress=video.progress,
+        created_at=video.created_at,
+    )
+
+
+@router.delete("/videos/{video_id}", response_model=MessageResponse)
+async def delete_video(
+    video_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除视频记录、关联笔记和物理文件。"""
+    video_id = _validate_uuid(video_id)
+
+    result = await db.execute(
+        select(Video).options(selectinload(Video.note)).where(Video.id == video_id)
+    )
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+
+    # 删除物理文件
+    file_path = Path(video.file_path)
+    if file_path.exists():
+        file_path.unlink(missing_ok=True)
+
+    # 删除音频文件（如果存在）
+    if video.audio_path:
+        audio_path = Path(video.audio_path)
+        if audio_path.exists():
+            audio_path.unlink(missing_ok=True)
+
+    # 删除关联笔记
+    if video.note:
+        await db.delete(video.note)
+
+    # 删除视频记录
+    await db.delete(video)
+    await db.commit()
+
+    return MessageResponse(message="已删除")

@@ -73,6 +73,12 @@ class LLMNoteResult(BaseModel):
     segments: list[SegmentOut] = []
 
 
+# ─── 批量下载 ──────────────────────────────────────────
+
+class BatchDownloadRequest(BaseModel):
+    video_ids: list[str] = Field(..., min_length=1, description="视频ID列表，至少一个")
+
+
 # ─── 通用消息 ──────────────────────────────────────────
 
 class MessageResponse(BaseModel):
