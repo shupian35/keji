@@ -57,6 +57,7 @@ async def get_db():
 async def init_db():
     """创建所有数据库表（异步）。"""
     from app.models.task import Base
+    import app.models.settings  # noqa: F401 — 注册 Settings 到 Base.metadata
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -65,5 +66,6 @@ async def init_db():
 def init_db_sync():
     """创建所有数据库表（同步，供 Celery worker 使用）。"""
     from app.models.task import Base
+    import app.models.settings  # noqa: F401 — 注册 Settings 到 Base.metadata
 
     Base.metadata.create_all(bind=sync_engine)

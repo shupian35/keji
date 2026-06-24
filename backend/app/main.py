@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.settings import router as settings_router
 from app.api.video import router as video_router
 from app.config import settings
 from app.database import init_db
@@ -40,6 +41,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(video_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
 
 
 @app.get("/api/health")

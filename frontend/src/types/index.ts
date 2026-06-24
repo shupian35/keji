@@ -37,6 +37,18 @@ export interface NoteResponse {
   transcript: Segment[];
 }
 
+/** 设置项 */
+export interface SettingItem {
+  key: string;
+  value: string | null;
+  description: string | null;
+}
+
+/** 批量更新设置请求 */
+export interface SettingsUpdate {
+  settings: SettingItem[];
+}
+
 /** 通用 API 包装 */
 export interface ApiResponse<T> {
   data: T;
