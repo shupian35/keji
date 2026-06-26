@@ -5,7 +5,7 @@
 ## 功能
 
 - 📤 视频上传（或粘贴链接）
-- 🎙️ 本地离线语音识别（faster-whisper，支持时间戳）
+- 🎙️ 云端语音识别（SiliconFlow SenseVoice，支持中英文）
 - 🤖 大模型生成结构化 Markdown 笔记（含时间戳关联）
 - 🎬 笔记与视频播放时间联动（点击跳转、播放高亮）
 - 📥 笔记导出（Markdown / PDF）
@@ -16,7 +16,7 @@
 | ------ | ---------------------------- |
 | 前端   | React + TypeScript + Vite + Tailwind CSS |
 | 后端   | Python 3.11+ + FastAPI + Celery |
-| 语音转写 | faster-whisper (本地部署)   |
+| 语音转写 | SiliconFlow SenseVoice (云端) |
 | 笔记生成 | DeepSeek / OpenAI 兼容 API |
 | 视频处理 | ffmpeg                      |
 | 数据库 | PostgreSQL (开发可用 SQLite) |
@@ -36,7 +36,10 @@
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 LLM_API_KEY 等必要配置
+cp backend/.env.example backend/.env
+# 编辑 backend/.env，填入以下必要配置：
+#   LLM_API_KEY        — 大模型 API 密钥（DeepSeek / OpenAI 兼容）
+#   SILICONFLOW_API_KEY — SiliconFlow 语音识别 API 密钥
 ```
 
 ### 2. Docker 部署（推荐）
@@ -68,7 +71,7 @@ npm run dev
 
 ```bash
 cd backend
-celery -A app.tasks.worker worker --loglevel=info
+celery -A app.tasks.worker worker --loglevel=info --pool=solo
 ```
 
 ### 4. 访问
@@ -101,9 +104,9 @@ keji/
 ## 开发路线
 
 - [x] 阶段一：项目骨架搭建
-- [ ] 阶段二：MVP — 上传 → 转写 → 生成笔记
-- [ ] 阶段三：时间轴联动
-- [ ] 阶段四：可选增强（画面描述）
+- [x] 阶段二：MVP — 上传 → 转写 → 生成笔记
+- [x] 阶段三：时间轴联动（点击跳转、播放高亮）
+- [ ] 阶段四：可选增强（画面描述、PDF 导出）
 
 ## License
 

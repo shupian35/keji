@@ -57,7 +57,7 @@ backend/media/
 *.webm
 
 # Model files (too large for repo)
-/models/
+**/trained_/models/
 *.bin
 *.pt
 *.safetensors
