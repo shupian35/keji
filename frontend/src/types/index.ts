@@ -1,13 +1,6 @@
 /** 视频处理状态 */
 export type VideoStatus = "pending" | "processing" | "done" | "failed";
 
-/** 语音转写 / 笔记片段（带时间戳） */
-export interface Segment {
-  start: number;
-  end: number;
-  text: string;
-}
-
 /** 任务状态响应 */
 export interface TaskResponse {
   task_id: string;
@@ -33,8 +26,6 @@ export interface NoteResponse {
   filename: string;
   note_id: string;
   content_md: string;
-  segments: Segment[];
-  transcript: Segment[];
 }
 
 /** 批量下载请求 */

@@ -21,7 +21,7 @@ class Transcriber:
     用法:
         transcriber = Transcriber()
         segments = transcriber.transcribe("audio.wav", language="zh")
-        # [{"start": 0.0, "end": 120.0, "text": "完整转写文本..."}]
+        # [{"text": "完整转写文本..."}]
     """
 
     def __init__(self, api_key: str | None = None):
@@ -76,7 +76,7 @@ class Transcriber:
         return getattr(response, "text", None) or ""
 
     def transcribe(
-        self, audio_path: str, language: str | None = "zh", duration: float | None = None
+        self, audio_path: str, language: str | None = "zh"
     ) -> list[dict]:
         """
         通过 SiliconFlow API 进行语音转写。
@@ -84,11 +84,10 @@ class Transcriber:
         Args:
             audio_path: 音频文件路径
             language: 语言代码（预留，当前模型自动检测）
-            duration: 音频总时长（秒），用于生成时间戳区间
 
         Returns:
-            list[dict]: 转写片段，每个包含 start, end, text 字段
-                [{"start": 0.0, "end": 120.0, "text": "完整转写文本..."}]
+            list[dict]: 转写片段，每个包含 text 字段
+                [{"text": "完整转写文本..."}]
         """
         audio_path = Path(audio_path)
 
@@ -120,8 +119,7 @@ class Transcriber:
 
         logger.info("转写完成: %d 字符", len(text))
 
-        end_time = duration if duration else max(len(text) * 0.08, 1.0)
-        return [{"start": 0.0, "end": round(end_time, 2), "text": text}]
+        return [{"text": text}]
 
 
 _transcriber: Transcriber | None = None

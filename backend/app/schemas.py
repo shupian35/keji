@@ -15,22 +15,6 @@ class VideoStatus(str, Enum):
     failed = "failed"
 
 
-# ─── 语音转写片段 ───────────────────────────────────────
-
-class SegmentOut(BaseModel):
-    """单个笔记段落（带时间戳）"""
-    start: float = Field(..., description="开始时间（秒）")
-    end: float = Field(..., description="结束时间（秒）")
-    text: str = Field(..., description="段落 Markdown 文本")
-
-
-class TranscriptSegment(BaseModel):
-    """语音转写原始片段"""
-    start: float
-    end: float
-    text: str
-
-
 # ─── 任务状态 ──────────────────────────────────────────
 
 class TaskResponse(BaseModel):
@@ -60,8 +44,6 @@ class NoteResponse(BaseModel):
     filename: str
     note_id: str
     content_md: str
-    segments: list[SegmentOut] = []
-    transcript: list[SegmentOut] = []
 
 
 # ─── LLM 返回的内部结构 ─────────────────────────────────
@@ -70,7 +52,6 @@ class LLMNoteResult(BaseModel):
     """LLM 返回的笔记 JSON 结构"""
     title: str = ""
     markdown_content: str = ""
-    segments: list[SegmentOut] = []
 
 
 # ─── 批量下载 ──────────────────────────────────────────

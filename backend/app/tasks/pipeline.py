@@ -110,16 +110,15 @@ def process_video(self, video_id: str):
 
         transcriber = get_transcriber()
         transcript_segments = transcriber.transcribe(
-            str(audio_path), language="zh", duration=audio_duration
+            str(audio_path), language="zh"
         )
 
         if not transcript_segments:
             raise ValueError("语音转写结果为空，请检查音频是否包含有效语音")
 
         logger.info(
-            "转写完成: %d 个片段, 总时长 %.0fs",
+            "转写完成: %d 个片段",
             len(transcript_segments),
-            transcript_segments[-1]["end"] if transcript_segments else 0,
         )
 
         # ── 步骤 4: （可选）定时截帧 ────────────────
@@ -152,7 +151,6 @@ def process_video(self, video_id: str):
                 video_id=video_id_str,
                 content_md=note_data.get("markdown_content", ""),
             )
-            note.set_segments(note_data.get("segments", []))
             note.set_transcript(transcript_segments)
             db.add(note)
 
@@ -174,7 +172,6 @@ def process_video(self, video_id: str):
             "status": "done",
             "video_id": video_id_str,
             "note_id": str(note.id),
-            "segments_count": len(note_data.get("segments", [])),
         }
 
     except Exception as e:

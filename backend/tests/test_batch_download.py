@@ -13,8 +13,8 @@ from tests.conftest import create_note, create_video
 async def test_batch_download_success(client: AsyncClient, db):
     v1 = await create_video(db, filename="lecture1.mp4")
     v2 = await create_video(db, filename="lecture2.mp4")
-    await create_note(db, v1.id, content_md="# Lecture 1 Notes", transcript=[{"start": 0.0, "end": 3.0, "text": "Hello"}])
-    await create_note(db, v2.id, content_md="# Lecture 2 Notes", transcript=[{"start": 0.0, "end": 4.0, "text": "World"}])
+    await create_note(db, v1.id, content_md="# Lecture 1 Notes", transcript=[{"text": "Hello"}])
+    await create_note(db, v2.id, content_md="# Lecture 2 Notes", transcript=[{"text": "World"}])
 
     resp = await client.post("/api/videos/batch-download", json={"video_ids": [v1.id, v2.id]})
     assert resp.status_code == 200
@@ -24,14 +24,9 @@ async def test_batch_download_success(client: AsyncClient, db):
     with zipfile.ZipFile(zip_buffer) as zf:
         names = zf.namelist()
         assert "lecture1.md" in names
-        assert "lecture1.txt" in names
         assert "lecture2.md" in names
-        assert "lecture2.txt" in names
         assert zf.read("lecture1.md") == b"# Lecture 1 Notes"
         assert zf.read("lecture2.md") == b"# Lecture 2 Notes"
-        transcript1 = zf.read("lecture1.txt").decode()
-        assert "Hello" in transcript1
-        assert "[0.00s - 3.00s]" in transcript1
 
 
 @pytest.mark.asyncio
@@ -44,7 +39,7 @@ async def test_batch_download_single_video(client: AsyncClient, db):
 
     zip_buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(zip_buffer) as zf:
-        assert len(zf.namelist()) == 2
+        assert len(zf.namelist()) == 1
         assert "single.md" in zf.namelist()
 
 
@@ -128,22 +123,3 @@ async def test_batch_download_video_without_note(client: AsyncClient, db):
     zip_buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(zip_buffer) as zf:
         assert len(zf.namelist()) == 0
-
-
-@pytest.mark.asyncio
-async def test_batch_download_transcript_format(client: AsyncClient, db):
-    v = await create_video(db, filename="format.mp4")
-    transcript = [
-        {"start": 1.23, "end": 5.67, "text": "First segment"},
-        {"start": 6.0, "end": 10.5, "text": "Second segment"},
-    ]
-    await create_note(db, v.id, content_md="# Format Test", transcript=transcript)
-
-    resp = await client.post("/api/videos/batch-download", json={"video_ids": [v.id]})
-    assert resp.status_code == 200
-
-    zip_buffer = io.BytesIO(resp.content)
-    with zipfile.ZipFile(zip_buffer) as zf:
-        txt = zf.read("format.txt").decode()
-        assert "[1.23s - 5.67s] First segment" in txt
-        assert "[6.00s - 10.50s] Second segment" in txt

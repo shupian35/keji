@@ -67,7 +67,7 @@ async def create_video(db: AsyncSession, status="done", filename="test.mp4") -> 
 async def create_note(db: AsyncSession, video_id: str, content_md="# Test Note", transcript=None) -> Note:
     import json
     if transcript is None:
-        transcript = [{"start": 0.0, "end": 5.0, "text": "Hello world"}]
+        transcript = [{"text": "Hello world"}]
     note = Note(
         id=str(uuid.uuid4()),
         video_id=video_id,

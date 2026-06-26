@@ -20,7 +20,6 @@ from app.schemas import (
     BatchDownloadRequest,
     MessageResponse,
     NoteResponse,
-    SegmentOut,
     TaskResponse,
     VideoStatus,
     VideoResponse,
@@ -214,7 +213,7 @@ async def get_video_notes(
     """
     获取视频对应的结构化笔记。
 
-    返回 markdown_content 和 segments 数组（含时间戳）。
+    返回 markdown_content。
     """
     video_id = _validate_uuid(video_id)
 
@@ -232,22 +231,12 @@ async def get_video_notes(
         raise HTTPException(status_code=404, detail="笔记尚未生成，请等待处理完成")
 
     note = video.note
-    segments = note.get_segments()
-    transcript = note.get_transcript()
 
     return NoteResponse(
         video_id=video.id,
         filename=video.filename,
         note_id=note.id,
         content_md=note.content_md,
-        segments=[
-            SegmentOut(start=s["start"], end=s["end"], text=s["text"])
-            for s in segments
-        ],
-        transcript=[
-            SegmentOut(start=s["start"], end=s["end"], text=s["text"])
-            for s in transcript
-        ],
     )
 
 
@@ -393,14 +382,6 @@ async def batch_download_videos(
                     stem = Path(video.filename).stem
                     note_filename = f"{stem}.md"
                     zip_file.writestr(note_filename, note.content_md)
-
-                    transcript_segments = note.get_transcript()
-                    transcript_content = "\n".join(
-                        f"[{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}"
-                        for seg in transcript_segments
-                    )
-                    transcript_filename = f"{stem}.txt"
-                    zip_file.writestr(transcript_filename, transcript_content)
 
         zip_buffer.seek(0)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
