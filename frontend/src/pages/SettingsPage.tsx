@@ -6,11 +6,10 @@ const DEFAULT_SETTINGS: SettingItem[] = [
   { key: "STT_API_URL", value: "", description: "语音转文字API地址" },
   { key: "STT_API_KEY", value: "", description: "语音转文字API Key" },
   { key: "STT_MODEL", value: "", description: "语音转文字模型名称" },
+  { key: "AUDIO_CHUNK_ENABLED", value: "true", description: "启用长音频分段转写（超过10分钟自动在静音处切分）" },
   { key: "LLM_API_URL", value: "", description: "课程笔记API地址" },
   { key: "LLM_API_KEY", value: "", description: "课程笔记API Key" },
   { key: "LLM_MODEL", value: "", description: "课程笔记模型名称" },
-  { key: "NOTE_PROMPT_TEMPLATE", value: "", description: "提示词模板" },
-  { key: "NOTE_PROMPT_CUSTOM", value: "", description: "自定义提示词" },
 ];
 
 export default function SettingsPage() {
@@ -127,6 +126,28 @@ export default function SettingsPage() {
                   />
                 </div>
               ))}
+
+            {/* 长音频分段开关 */}
+            {settings.filter((item) => item.key === "AUDIO_CHUNK_ENABLED").map((item) => (
+              <div key={item.key} className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {item.description}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleChange(item.key, item.value === "true" ? "false" : "true")}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    item.value === "true" ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      item.value === "true" ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -146,29 +167,6 @@ export default function SettingsPage() {
                     value={item.value || ""}
                     onChange={(e) => handleChange(item.key, e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-gray-100"
-                    placeholder={item.description || ""}
-                  />
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {/* 提示词设置 */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">💡 提示词设置</h2>
-          <div className="space-y-4">
-            {settings
-              .filter((item) => item.key.startsWith("NOTE_PROMPT_"))
-              .map((item) => (
-                <div key={item.key}>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {item.description}
-                  </label>
-                  <textarea
-                    value={item.value || ""}
-                    onChange={(e) => handleChange(item.key, e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-gray-100"
-                    rows={6}
                     placeholder={item.description || ""}
                   />
                 </div>

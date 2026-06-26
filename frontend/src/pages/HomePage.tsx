@@ -8,7 +8,7 @@ export default function HomePage() {
       {/* 底部提示 */}
       <div className="max-w-xl mx-auto mt-12 px-4 text-center text-gray-400 dark:text-gray-500 text-sm">
         <p>
-          🔒 语音识别完全在本地进行，不上传音频到云端
+          🔊 语音识别通过第三方 API 完成，音频会上传至云端处理
           {" · "}
           📝 笔记使用 AI 大模型生成
         </p>

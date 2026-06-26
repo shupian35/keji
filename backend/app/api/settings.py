@@ -60,12 +60,11 @@ async def update_settings(body: SettingsUpdate, db: AsyncSession = Depends(get_d
         setting = result.scalar_one_or_none()
 
         if setting:
-            # 如果是API Key且值为空，保留原值
             if item.value is not None:
-                if "KEY" in item.key.upper() and item.value.strip() == "":
-                    # 保留原值，不更新
-                    pass
-                else:
+                # 跳过空值和掩码值（如 "sk-c...prgx"）
+                is_empty = item.value.strip() == ""
+                is_masked = "..." in item.value and "KEY" in item.key.upper()
+                if not is_empty and not is_masked:
                     setting.value = item.value
             if item.description is not None:
                 setting.description = item.description
@@ -114,12 +113,10 @@ async def update_setting(key: str, body: SettingItem, db: AsyncSession = Depends
     setting = result.scalar_one_or_none()
 
     if setting:
-        # 如果是API Key且值为空，保留原值
         if body.value is not None:
-            if "KEY" in key.upper() and body.value.strip() == "":
-                # 保留原值，不更新
-                pass
-            else:
+            is_empty = body.value.strip() == ""
+            is_masked = "..." in body.value and "KEY" in key.upper()
+            if not is_empty and not is_masked:
                 setting.value = body.value
         if body.description is not None:
             setting.description = body.description

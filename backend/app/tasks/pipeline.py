@@ -185,3 +185,101 @@ def process_video(self, video_id: str):
                 logger.warning("无法清理音频文件: %s", audio_path)
         _update_video_status(video_id_str, "failed", 0.0, error=str(e))
         raise
+
+
+@celery_app.task(bind=True, max_retries=1)
+def regenerate_notes(self, video_id: str):
+    """
+    重新生成笔记。
+
+    如果已有转写原文，直接用 LLM 重新生成笔记（跳过音频提取和转写）。
+    如果没有转写原文，回退到完整处理流水线。
+    """
+    init_db_sync()
+
+    video_id_str = str(video_id)
+    logger.info("开始重新生成笔记: %s", video_id_str)
+
+    def _progress(progress: float, step: str):
+        self.update_state(
+            state="PROCESSING",
+            meta={"progress": progress, "step": step, "video_id": video_id_str},
+        )
+        _update_video_status(video_id_str, "processing", progress)
+        logger.info("[%.1f%%] %s", progress * 100, step)
+
+    try:
+        from app.models.task import Video, Note
+
+        _progress(0.0, "读取视频信息...")
+
+        db = SyncSessionLocal()
+        try:
+            video = db.query(Video).filter(Video.id == video_id_str).first()
+            if not video:
+                raise ValueError(f"视频不存在: {video_id_str}")
+
+            video.status = "processing"
+            video.progress = 0.0
+            db.commit()
+
+            video_path = video.file_path
+        finally:
+            db.close()
+
+        # 检查是否已有转写原文
+        db = SyncSessionLocal()
+        try:
+            existing_note = db.query(Note).filter(Note.video_id == video_id_str).first()
+            transcript_segments = existing_note.get_transcript() if existing_note else []
+        finally:
+            db.close()
+
+        if not transcript_segments:
+            # 没有转写原文，回退到完整流水线
+            logger.info("无转写原文，回退到完整处理流水线")
+            return process_video(self, video_id)
+
+        # 有转写原文，跳过音频提取和转写
+        _progress(0.3, "AI 重新生成笔记中...")
+
+        from app.services.llm import generate_notes_sync
+
+        note_data = generate_notes_sync(transcript_segments)
+
+        _progress(0.85, "保存笔记...")
+
+        import uuid as uuid_mod
+
+        db = SyncSessionLocal()
+        try:
+            db.query(Note).filter(Note.video_id == video_id_str).delete()
+
+            note = Note(
+                id=str(uuid_mod.uuid4()),
+                video_id=video_id_str,
+                content_md=note_data.get("markdown_content", ""),
+            )
+            note.set_transcript(transcript_segments)
+            db.add(note)
+
+            video = db.query(Video).filter(Video.id == video_id_str).first()
+            if video:
+                video.status = "done"
+                video.progress = 1.0
+
+            db.commit()
+            logger.info("笔记已重新生成: %s", note.id)
+        finally:
+            db.close()
+
+        return {
+            "status": "done",
+            "video_id": video_id_str,
+            "note_id": str(note.id),
+        }
+
+    except Exception as e:
+        logger.exception("重新生成笔记失败: %s", e)
+        _update_video_status(video_id_str, "failed", 0.0, error=str(e))
+        raise

@@ -26,6 +26,7 @@ export interface NoteResponse {
   filename: string;
   note_id: string;
   content_md: string;
+  transcript: string[];
 }
 
 /** 批量下载请求 */

@@ -14,30 +14,36 @@ logger = logging.getLogger(__name__)
 # ─── Prompt 模板 ───────────────────────────────────────
 
 SYSTEM_PROMPT = (
-    "你是一个精确的 JSON 输出机器，同时你也是一位专业的课程笔记整理专家。"
-    "请严格按照要求输出 JSON，不要添加任何多余文字或 Markdown 代码块。"
+    "你是一位专业的课程笔记整理专家。你的任务是将课堂录音转写文本整理成结构清晰、内容精炼的 Markdown 笔记。"
+    "你必须严格按照指定 JSON 格式输出，不要添加任何多余文字、解释或 Markdown 代码块标记。"
 )
 
-NOTE_GENERATION_PROMPT = """你是一个专业的课程笔记整理助手。请根据以下课堂录音转写文本，生成详细的课程笔记。
+NOTE_GENERATION_PROMPT = """请将以下课堂录音转写文本整理成一份高质量的课程笔记。
 
-## 要求
+## 笔记要求
 
-### 笔记内容
-1. 使用 Markdown 格式，包含课程标题、目录、详细内容、重点总结
-2. 笔记应该比原始转写更精炼，去掉口语化的重复和填充词，保留核心知识点
-3. 分段要自然，每个段落覆盖一个完整知识点或话题单元
+### 内容原则
+- 保留所有核心知识点、关键概念、重要定义
+- 去除口语化表达、重复内容、无意义的语气词和填充词
+- 保留讲师的举例和案例说明，用简洁语言概括
+- 如果有明确的课程结构（如"第一章"、"第二部分"），按原结构组织
 
-### 输出格式（严格 JSON）
+### 笔记结构
+1. **标题**：准确概括课程主题
+2. **正文**：使用 Markdown 格式，合理使用标题层级（h2/h3）、列表、加粗、代码块等
+3. **段落**：每个段落聚焦一个知识点，逻辑清晰，过渡自然
+
+### 输出格式
+严格输出以下 JSON 格式：
+```json
 {{
   "title": "课程标题",
-  "markdown_content": "完整的 Markdown 笔记全文"
+  "markdown_content": "完整的 Markdown 笔记内容"
 }}
+```
 
-注意：
-- 只需要返回 title 和 markdown_content，不需要 segments 字段
-- markdown_content 应该是完整的课程笔记内容
+## 课堂转写文本
 
-【转写文本】
 {transcript_json}"""
 
 
@@ -139,7 +145,7 @@ def generate_notes_sync(
     """
     # 优先从数据库读取配置，回退到环境变量
     llm_api_key = get_setting_value_sync("LLM_API_KEY", settings.llm_api_key)
-    llm_base_url = get_setting_value_sync("LLM_BASE_URL", settings.llm_base_url)
+    llm_base_url = get_setting_value_sync("LLM_API_URL", settings.llm_base_url)
     llm_model = get_setting_value_sync("LLM_MODEL", settings.llm_model)
 
     if not llm_api_key:

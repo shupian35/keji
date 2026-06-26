@@ -1,17 +1,17 @@
 # AGENTS.md
 
-课记 (Course AI Notes) — full-stack app that converts course videos into structured, timestamped Markdown notes.
+课记 (Course AI Notes) — 将课程视频转换为结构化 Markdown 笔记的全栈应用。
 
-## Project layout
+## 项目结构
 
-- `backend/` — Python 3.11+ FastAPI + Celery async pipeline
+- `backend/` — Python 3.11+ FastAPI + Celery 异步处理流水线
 - `frontend/` — React 18 + TypeScript + Vite + Tailwind CSS
-- `docker-compose.yml` — 5 services: api, worker, redis, db, frontend
-- `docs/adr/` — Architecture Decision Records
+- `docker-compose.yml` — 5 个服务：api, worker, redis, db, frontend
+- `docs/adr/` — 架构决策记录
 
-## Commands
+## 命令
 
-### Backend
+### 后端
 
 ```bash
 cd backend && py -m pip install -r requirements.txt
@@ -19,13 +19,13 @@ py -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 celery -A app.tasks.worker worker --loglevel=info --pool=solo
 ```
 
-**Critical**: Celery worker MUST use `--pool=solo` locally. Without it, concurrent workers may race on the same video file. Docker compose already sets `--concurrency=1`.
+**关键**：本地 Celery worker 必须使用 `--pool=solo`，否则多个 worker 可能并发操作同一视频文件。Docker compose 已设置 `--concurrency=1`。
 
-### Frontend
+### 前端
 
 ```bash
 cd frontend && npm install && npm run dev
-npm run build   # runs tsc -b && vite build
+npm run build   # 运行 tsc -b && vite build
 ```
 
 ### Docker
@@ -34,65 +34,65 @@ npm run build   # runs tsc -b && vite build
 docker compose up -d
 ```
 
-Docker frontend expects pre-built `frontend/dist/`. Build first: `cd frontend && npm run build`.
+Docker 前端需要预构建的 `frontend/dist/`。先执行：`cd frontend && npm run build`。
 
-## Two .env files
+## 两个 .env 文件
 
-- **Root `.env`** — copied from `.env.example`. Used by docker-compose.
-- **`backend/.env`** — separate file read by pydantic-settings. Backend config lives here.
+- **根目录 `.env`** — 从 `.env.example` 复制，供 docker-compose 使用。
+- **`backend/.env`** — pydantic-settings 读取的独立文件，后端配置在此。
 
-Both must have `LLM_API_KEY` set for note generation to work.
+两者都必须设置 `LLM_API_KEY` 才能生成笔记。
 
-## Architecture gotchas
+## 架构要点
 
-### Dual database engine
+### 双数据库引擎
 
-The codebase uses **two** SQLAlchemy engines simultaneously:
-- `AsyncSession` for FastAPI endpoints (`database.py:get_db()`)
-- `SyncSession` for Celery worker (`SyncSessionLocal()`)
+代码库同时使用**两个** SQLAlchemy 引擎：
+- `AsyncSession` 用于 FastAPI 端点（`database.py:get_db()`）
+- `SyncSession` 用于 Celery worker（`SyncSessionLocal()`）
 
-`settings.sync_database_url` auto-derives from `database_url` by stripping the async driver. Never mix them — FastAPI code must use `await`, Celery code uses synchronous calls.
+`settings.sync_database_url` 从 `database_url` 自动派生，去除异步驱动。切勿混用——FastAPI 代码必须使用 `await`，Celery 代码使用同步调用。
 
-### Celery dual state bus
+### Celery 双状态总线
 
-Progress is written to **both** Redis (Celery result backend) and the database. `GET /api/tasks/{id}` reads Celery first, falls back to DB. If Redis is down, progress still works via DB polling.
+进度同时写入 **Redis**（Celery 结果后端）和**数据库**。`GET /api/tasks/{id}` 优先读 Celery，回退到数据库。Redis 不可用时仍可通过数据库轮询获取进度。
 
-### IDs are String(36) UUIDs
+### ID 为 String(36) UUID
 
-Not native DB UUID type. This is intentional for SQLite portability. Don't change to `UUID` column type.
+非原生数据库 UUID 类型，这是为了 SQLite 兼容性。不要改为 `UUID` 列类型。
 
-### Video ID = Task ID
+### 视频 ID = 任务 ID
 
-For simplicity in MVP, the video record ID doubles as the Celery task ID. The frontend polls `GET /api/tasks/{video_id}`.
+MVP 简化设计，视频记录 ID 同时作为 Celery 任务 ID。前端轮询 `GET /api/tasks/{video_id}`。
 
-### Upload graceful degradation
+### 上传优雅降级
 
-If Celery/Redis is unreachable at upload time, video is saved as `status: "pending"`. The `/api/videos/{id}/retry` endpoint resubmits later. The app works for upload without a running worker.
+上传时若 Celery/Redis 不可达，视频保存为 `status: "pending"`。`/api/videos/{id}/retry` 端点可稍后重新提交。应用在无 worker 运行时仍可上传。
 
-## Whisper model
+## 语音识别模型
 
-Uses SiliconFlow API (FunAudioLLM/SenseVoiceSmall) for cloud transcription. Config via env: `SILICONFLOW_API_KEY`, `SILICONFLOW_MODEL`.
+使用 SiliconFlow API（FunAudioLLM/SenseVoiceSmall）进行云端转写。配置项：`SILICONFLOW_API_KEY`、`SILICONFLOW_MODEL`。
 
-## LLM fallback chain
+## LLM 回退链
 
-`services/llm.py` has 4 layers: strict JSON mode → standard call → regex extraction from response → similarity-based segment alignment. If the LLM returns no valid segments, a `SequenceMatcher` heuristic splits `markdown_content` by paragraphs and aligns to transcript timestamps.
+`services/llm.py` 有 2 层回退：严格 JSON 模式 → 标准调用。从响应中提取 JSON 支持直接解析、代码块提取、花括号提取三种方式。
 
-## Key integration points
+## 关键集成点
 
-- **Adding a pipeline step**: edit `process_video()` in `tasks/pipeline.py`. Call `_progress(percent, "description")` to update both Celery and DB.
-- **Adding screenshot descriptions**: `video_utils.extract_screenshot()` exists. Pass to `generate_notes_sync()` via `screenshot_descriptions=` parameter.
-- **LLM config change**: set `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY` in `.env`. Any OpenAI Chat Completions-compatible API works.
+- **添加流水线步骤**：编辑 `tasks/pipeline.py` 中的 `process_video()`。调用 `_progress(percent, "描述")` 同时更新 Celery 和数据库。
+- **添加截图描述**：`video_utils.extract_screenshot()` 已存在。通过 `screenshot_descriptions=` 参数传递给 `generate_notes_sync()`。
+- **修改 LLM 配置**：在数据库设置中配置 `LLM_MODEL`、`LLM_API_URL`、`LLM_API_KEY`。任何 OpenAI Chat Completions 兼容 API 均可使用。
 
-## Constraints
+## 约束
 
-- Speech recognition uses **SiliconFlow cloud API** (SenseVoiceSmall). Requires `SILICONFLOW_API_KEY`.
-- Celery worker: `--concurrency=1`, `prefetch_multiplier=1` — one video at a time.
-- No auth/user system. CORS is the only access control.
-- File paths stored as absolute paths — must be consistent between API and Worker containers (volume mounts handle this).
-- No test suite, linter, or CI pipeline exists yet.
+- 语音识别使用 **SiliconFlow 云端 API**（SenseVoiceSmall），需要 `SILICONFLOW_API_KEY`。
+- Celery worker：`--concurrency=1`、`prefetch_multiplier=1`——每次只处理一个视频。
+- 无认证/用户系统，CORS 是唯一的访问控制。
+- 文件路径存储为绝对路径——API 和 Worker 容器间必须一致（通过 volume 挂载处理）。
+- 无测试套件、linter 或 CI 流水线。
 
-## Frontend conventions
+## 前端约定
 
-- `@` alias maps to `./src` (configured in `vite.config.ts`).
-- Vite dev server proxies `/api` to `http://localhost:8000`.
-- No test framework or linting is configured. `npm run build` runs `tsc -b && vite build` which catches type errors.
+- `@` 别名映射到 `./src`（在 `vite.config.ts` 中配置）。
+- Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`。
+- 无测试框架或 linter 配置。`npm run build` 运行 `tsc -b && vite build` 可捕获类型错误。

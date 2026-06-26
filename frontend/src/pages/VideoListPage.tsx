@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listVideos, deleteVideo, updateVideo, retryVideo, batchDownloadVideos } from "../api/client";
+import { listVideos, deleteVideo, updateVideo, retryVideo, regenerateNotes, batchDownloadVideos } from "../api/client";
 import type { VideoInfo, VideoStatus } from "../types";
 
 const STATUS_BADGE: Record<VideoStatus, { label: string; cls: string }> = {
@@ -26,6 +26,7 @@ export default function VideoListPage() {
   const [editValue, setEditValue] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
@@ -87,6 +88,20 @@ export default function VideoListPage() {
       console.error(err);
     } finally {
       setRetryingId(null);
+    }
+  };
+
+  const handleRegenerate = async (id: string) => {
+    try {
+      await regenerateNotes(id);
+      setVideos((prev) => prev.map((v) =>
+        v.id === id ? { ...v, status: "pending" as VideoStatus, progress: 0 } : v
+      ));
+      navigate(`/task/${id}`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRegeneratingId(null);
     }
   };
 
@@ -220,6 +235,7 @@ export default function VideoListPage() {
           const isEditing = editingId === v.id;
           const isDeleting = deletingId === v.id;
           const isRetrying = retryingId === v.id;
+          const isRegenerating = regeneratingId === v.id;
           const canRetry = v.status === "failed" || v.status === "pending";
 
           return (
@@ -333,6 +349,23 @@ export default function VideoListPage() {
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        )
+                      )}
+
+                      {/* 重新生成笔记按钮 */}
+                      {isDone && (
+                        isRegenerating ? (
+                          <span className="text-xs text-orange-500 dark:text-orange-400">生成中...</span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRegeneratingId(v.id); handleRegenerate(v.id); }}
+                            className="text-gray-400 hover:text-orange-500 dark:text-gray-500 dark:hover:text-orange-400 transition-colors"
+                            title="重新生成笔记"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                             </svg>
                           </button>
                         )

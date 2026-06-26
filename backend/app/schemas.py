@@ -44,6 +44,7 @@ class NoteResponse(BaseModel):
     filename: str
     note_id: str
     content_md: str
+    transcript: list[str] = []
 
 
 # ─── LLM 返回的内部结构 ─────────────────────────────────

@@ -1,26 +1,29 @@
-"""SiliconFlow 语音转写服务封装"""
+"""语音转写服务封装 — 使用 OpenAI 兼容协议"""
 
-import json
 import logging
+import re
 import subprocess
+import tempfile
 from pathlib import Path
+
+from openai import OpenAI
 
 from app.config import settings
 from app.settings_utils import get_setting_value_sync
 
 logger = logging.getLogger(__name__)
 
+CHUNK_DURATION = 600  # 每段 10 分钟
+
 
 class Transcriber:
     """
-    云端语音识别服务（SiliconFlow SenseVoice）。
-
-    使用 SiliconFlow API 进行语音转写，返回完整文本。
-    优先使用 curl 调用（兼容性更好），回退到 OpenAI 客户端。
+    语音识别服务，使用 OpenAI 兼容协议调用 ASR API。
+    长音频自动在静音处切分转写。
 
     用法:
         transcriber = Transcriber()
-        segments = transcriber.transcribe("audio.wav", language="zh")
+        segments = transcriber.transcribe("audio.wav")
         # [{"text": "完整转写文本..."}]
     """
 
@@ -35,59 +38,94 @@ class Transcriber:
     def base_url(self) -> str:
         return get_setting_value_sync("STT_API_URL", settings.siliconflow_base_url)
 
-    def _transcribe_with_curl(self, audio_path: Path) -> str:
-        """使用 curl 调用语音转写 API（兼容性更好）"""
-        url = f"{self.base_url}/audio/transcriptions"
+    def _get_client(self) -> OpenAI:
+        return OpenAI(api_key=self.api_key, base_url=self.base_url)
+
+    def _get_duration(self, audio_path: Path) -> float:
+        """获取音频时长（秒）"""
         result = subprocess.run(
-            [
-                "curl", "-s", "-X", "POST", url,
-                "-H", f"Authorization: Bearer {self.api_key}",
-                "-F", f"model={self.model}",
-                "-F", f"file=@{audio_path}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
+            capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"curl 调用失败: {result.stderr}")
+            raise RuntimeError(f"ffprobe 失败: {result.stderr}")
+        return float(result.stdout.strip())
 
-        data = json.loads(result.stdout)
-        if "error" in data:
-            raise RuntimeError(f"API 错误: {data['error']}")
-
-        return data.get("text", "")
-
-    def _transcribe_with_openai(self, audio_path: Path) -> str:
-        """使用 OpenAI 客户端调用语音转写 API"""
-        from openai import OpenAI
-
-        client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
+    def _detect_silence(self, audio_path: Path, min_silence: float = 0.5, noise: str = "-30dB") -> list[float]:
+        """检测音频中的静音点，返回静音开始时间列表"""
+        result = subprocess.run(
+            ["ffmpeg", "-i", str(audio_path), "-af",
+             f"silencedetect=noise={noise}:d={min_silence}",
+             "-f", "null", "-"],
+            capture_output=True, text=True, timeout=600,
         )
+        times = []
+        for match in re.finditer(r"silence_start:\s*([\d.]+)", result.stderr):
+            times.append(float(match.group(1)))
+        return sorted(times)
 
-        with open(audio_path, "rb") as f:
+    def _split_audio(self, audio_path: Path, max_duration: int, tmpdir: Path) -> list[Path]:
+        """在静音处切分音频，每段不超过 max_duration 秒"""
+        total = self._get_duration(audio_path)
+        if total <= max_duration:
+            return [audio_path]
+
+        silence_points = self._detect_silence(audio_path)
+        logger.info("检测到 %d 个静音点", len(silence_points))
+
+        splits = [0.0]
+        pos = 0.0
+        while pos + max_duration < total:
+            target = pos + max_duration
+            candidates = [t for t in silence_points if pos + 60 < t < target + max_duration * 0.1]
+            if candidates:
+                split_at = min(candidates, key=lambda t: abs(t - target))
+            else:
+                split_at = target
+            splits.append(split_at)
+            pos = split_at
+
+        chunks = []
+        for i in range(len(splits)):
+            start = splits[i]
+            end = splits[i + 1] if i + 1 < len(splits) else total
+            chunk_path = tmpdir / f"chunk_{i:03d}.wav"
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(audio_path), "-ss", f"{start:.3f}",
+                 "-t", f"{end - start:.3f}", "-acodec", "pcm_s16le",
+                 "-ar", "16000", "-ac", "1", str(chunk_path)],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"ffmpeg 分段失败: {result.stderr}")
+            chunks.append(chunk_path)
+            logger.info("分段 %d/%d: %.0fs ~ %.0fs", i + 1, len(splits), start, end)
+
+        return chunks
+
+    def _transcribe_chunk(self, chunk_path: Path) -> str:
+        """转写单个音频片段"""
+        client = self._get_client()
+        with open(chunk_path, "rb") as f:
             response = client.audio.transcriptions.create(
                 model=self.model,
-                file=(audio_path.name, f),
+                file=(chunk_path.name, f),
             )
+        text = getattr(response, "text", None) or ""
+        logger.info("转写成功: %s (%d 字符)", chunk_path.name, len(text))
+        return text
 
-        return getattr(response, "text", None) or ""
-
-    def transcribe(
-        self, audio_path: str, language: str | None = "zh"
-    ) -> list[dict]:
+    def transcribe(self, audio_path: str, language: str | None = "zh") -> list[dict]:
         """
-        通过 SiliconFlow API 进行语音转写。
+        通过 OpenAI 兼容协议进行语音转写。
 
         Args:
             audio_path: 音频文件路径
             language: 语言代码（预留，当前模型自动检测）
 
         Returns:
-            list[dict]: 转写片段，每个包含 text 字段
-                [{"text": "完整转写文本..."}]
+            list[dict]: [{"text": "完整转写文本..."}]
         """
         audio_path = Path(audio_path)
 
@@ -97,20 +135,19 @@ class Transcriber:
         if not self.api_key:
             raise ValueError("STT_API_KEY 未配置，无法进行语音转写")
 
-        logger.info("开始转写: %s (model=%s)", audio_path, self.model)
+        logger.info("开始转写: %s (model=%s, url=%s)", audio_path, self.model, self.base_url)
 
-        # 优先使用 curl（SiliconFlow API 对 Python HTTP 客户端有兼容性问题）
-        try:
-            text = self._transcribe_with_curl(audio_path)
-            logger.info("curl 转写成功: %d 字符", len(text))
-        except Exception as e:
-            logger.warning("curl 转写失败 (%s)，尝试 OpenAI 客户端", e)
-            try:
-                text = self._transcribe_with_openai(audio_path)
-                logger.info("OpenAI 客户端转写成功: %d 字符", len(text))
-            except Exception as e2:
-                logger.error("OpenAI 客户端也失败: %s", e2)
-                raise
+        chunk_enabled = get_setting_value_sync("AUDIO_CHUNK_ENABLED", "true").lower() == "true"
+        duration = self._get_duration(audio_path)
+
+        if chunk_enabled and duration > CHUNK_DURATION:
+            logger.info("音频时长 %.0fs，启用静音切分转写（每段 ≤%ds）", duration, CHUNK_DURATION)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                chunks = self._split_audio(audio_path, CHUNK_DURATION, Path(tmpdir))
+                texts = [self._transcribe_chunk(chunk) for chunk in chunks]
+                text = "\n".join(texts)
+        else:
+            text = self._transcribe_chunk(audio_path)
 
         text = text.strip()
         if not text:
@@ -118,7 +155,6 @@ class Transcriber:
             return []
 
         logger.info("转写完成: %d 字符", len(text))
-
         return [{"text": text}]
 
 

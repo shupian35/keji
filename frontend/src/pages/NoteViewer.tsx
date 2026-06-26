@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import { getNotes, getMediaUrl } from "../api/client";
+import { getNotes, getMediaUrl, regenerateNotes } from "../api/client";
 import type { NoteResponse } from "../types";
 
 /* ─── 工具函数 ─────────────────────────────────────── */
@@ -24,6 +24,11 @@ function exportNotes(contentMd: string, filename: string) {
   downloadFile(contentMd, `${filename}.md`, "text/markdown;charset=utf-8");
 }
 
+/** 导出语音转写原文为文本 */
+function exportTranscript(transcript: string[], filename: string) {
+  downloadFile(transcript.join("\n\n"), `${filename}_转写原文.txt`, "text/plain;charset=utf-8");
+}
+
 /* ─── 主组件 ──────────────────────────────────────── */
 
 export default function NoteViewer() {
@@ -38,6 +43,10 @@ export default function NoteViewer() {
   // 播放状态
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // 转写原文折叠状态
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   // ── 加载笔记 ──────────────────────────────────
   useEffect(() => {
@@ -66,6 +75,21 @@ export default function NoteViewer() {
     },
     [duration],
   );
+
+  // ── 重新生成笔记 ──────────────────────────────────
+  const handleRegenerate = async () => {
+    if (!videoId || regenerating) return;
+    setRegenerating(true);
+    try {
+      await regenerateNotes(videoId);
+      navigate(`/task/${videoId}`);
+    } catch (err) {
+      console.error(err);
+      alert("重新生成失败");
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   // ── 加载态 ──────────────────────────────────────
   if (loading) {
@@ -109,6 +133,23 @@ export default function NoteViewer() {
             title="导出 AI 课程笔记"
           >
             📥 导出笔记
+          </button>
+          {notes.transcript.length > 0 && (
+            <button
+              onClick={() => exportTranscript(notes.transcript, notes.filename.replace(/\.[^.]+$/, ""))}
+              className="px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+              title="导出语音转写原文"
+            >
+              📥 导出转写
+            </button>
+          )}
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="px-2 py-1 rounded bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 transition-colors disabled:opacity-50"
+            title="重新生成笔记"
+          >
+            {regenerating ? "生成中..." : "🔄 重新生成"}
           </button>
           <button
             onClick={() => navigate("/")}
@@ -172,6 +213,29 @@ export default function NoteViewer() {
             ">
               <ReactMarkdown>{notes.content_md}</ReactMarkdown>
             </div>
+
+            {/* ── 语音转写原文 ─────────────────── */}
+            {notes.transcript.length > 0 && (
+              <div className="border-t border-gray-200 dark:border-gray-700 mt-6 pt-4">
+                <button
+                  onClick={() => setShowTranscript(!showTranscript)}
+                  className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors w-full text-left"
+                >
+                  <span className={`transition-transform ${showTranscript ? "rotate-90" : ""}`}>▶</span>
+                  📝 语音转写原文（{notes.transcript.length} 段）
+                </button>
+
+                {showTranscript && (
+                  <div className="mt-3 space-y-2 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+                    {notes.transcript.map((text, idx) => (
+                      <p key={idx} className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                        {text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

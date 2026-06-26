@@ -231,12 +231,15 @@ async def get_video_notes(
         raise HTTPException(status_code=404, detail="笔记尚未生成，请等待处理完成")
 
     note = video.note
+    transcript_raw = note.get_transcript()
+    transcript = [seg.get("text", "") for seg in transcript_raw if seg.get("text")]
 
     return NoteResponse(
         video_id=video.id,
         filename=video.filename,
         note_id=note.id,
         content_md=note.content_md,
+        transcript=transcript,
     )
 
 

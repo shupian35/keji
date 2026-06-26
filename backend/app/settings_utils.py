@@ -47,7 +47,7 @@ def get_ai_config() -> dict:
 
     # 同步版本，供 Celery worker 使用
     llm_api_key = get_setting_value_sync("LLM_API_KEY", settings.llm_api_key)
-    llm_base_url = get_setting_value_sync("LLM_BASE_URL", settings.llm_base_url)
+    llm_base_url = get_setting_value_sync("LLM_API_URL", settings.llm_base_url)
     llm_model = get_setting_value_sync("LLM_MODEL", settings.llm_model)
 
     siliconflow_api_key = get_setting_value_sync("STT_API_KEY", settings.siliconflow_api_key)
